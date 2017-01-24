@@ -345,6 +345,8 @@
      * Clipboard driver static methods
      */
     defineProperties(ClipboardDriver, {
+        position: 0,
+
         /**
          * Drivers storage
          */
@@ -400,6 +402,15 @@
             }
         },
 
+        getAll: function () {
+            return Object.keys(this.drivers)
+                .reduce(function (result, driverName) {
+                    result.push(this.drivers[driverName]);
+                    return result;
+                }.bind(this), [])
+                .sort();
+        },
+
         /**
          * Register new clipboard driver
          *
@@ -421,7 +432,9 @@
                 });
             }
 
-            this.drivers[driver.name] = driver;
+            this.drivers[driver.name] = defineProperties(driver, {
+                position: this.position++
+            });
 
             return this;
         },
@@ -515,47 +528,26 @@
         },
 
         checkSupport: function () {
-            return this.isSupport === undefined ? this.isSupport = doc.queryCommandSupported('copy') : this.isSupport;
+            if (this.isSupport === undefined) {
+                this.isSupport = doc.queryCommandSupported('copy');
+            }
+
+            return this.isSupport;
         },
 
         copy: function (elem, callback) {
             var mouseDownHandler = function (e) {
-                e.preventDefault();
-
                 var val = this.callbackToString(callback, e.target);
 
                 this.copyElement.value = val;
                 this.copyElement.select();
 
-                try {
-                    doc.execCommand('copy');
+                doc.execCommand('copy');
 
-                    this.trigger('copy', {
-                        target: e.currentTarget,
-                        text: val
-                    });
-                } catch (err) {
-                    this.isSupport = false;
-                }
-
-                if (this.isSupport === undefined) {
-                    this.checkSupport();
-
-                    if (this.isSupport) {
-                        ClipboardDriver.remove('flash');
-                    }
-                }
-
-                if (!this.isSupport) {
-                    this.trigger('error', {
-                        clipboardType: 'native',
-                        target: e.currentTarget,
-                        message: 'Native clipboard not supported',
-                        name: 'support'
-                    });
-                } else {
-                    ClipboardDriver.use('native');
-                }
+                this.trigger('copy', {
+                    target: e.currentTarget,
+                    text: val
+                });
             }.bind(this);
 
             elem.forEach(function (item) {
@@ -649,40 +641,19 @@
             args.splice(0, 1, toElements(elem));
 
             if (ClipboardDriver.using === undefined) {
-                var base = ClipboardDriver.get(globalConfig.baseDriver);
-                base.copy.apply(base, args);
-
-                if (globalConfig.alternativeDriver && ClipboardDriver.has(globalConfig.alternativeDriver)) {
-                    var alt = ClipboardDriver.get(globalConfig.alternativeDriver);
-
-                    if (alt.checkSupport()) {
-                        alt.copy.apply(alt, args);
+                var hasSupported;
+                ClipboardDriver.getAll().forEach(function (driver) {
+                    if (!hasSupported && driver.checkSupport()) {
+                        driver.copy.apply(driver, args);
+                        ClipboardDriver.use(driver.name);
+                        hasSupported = true;
                     } else {
-                        ClipboardDriver.remove(alt.name);
+                        ClipboardDriver.remove(driver.name);
                     }
-                }
+                });
             } else {
                 ClipboardDriver.current.copy.apply(ClipboardDriver.current, args);
             }
-
-            this.on('error', function (e) {
-
-                if (e.name === 'support') {
-                    ClipboardDriver.remove(e.clipboardType);
-
-                    for (var key in ClipboardDriver.drivers) {
-                        var driver = ClipboardDriver.drivers[key];
-
-                        if (driver.checkSupport()) {
-                            driver.copy.apply(driver, args);
-                            ClipboardDriver.use(driver.name);
-                            e.target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-
-                            break;
-                        }
-                    }
-                }
-            }, this);
 
             return this;
         },
