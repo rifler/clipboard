@@ -459,20 +459,20 @@
      * Clipboard driver validation interface
      */
     defineProperties(ClipboardDriver.prototype, {
-        set name(name) {
-            if (typeof name !== 'string') {
+        set name(value) {
+            if (typeof value !== 'string') {
                 throw Error('name is not a string');
             }
 
-            Object.defineProperty(this, 'name', { value: name });
+            Object.defineProperty(this, 'name', { value: value });
         },
 
-        set type(type) {
-            if (typeof type !== 'string') {
+        set type(value) {
+            if (typeof value !== 'string') {
                 throw Error('type is not a string');
             }
 
-            Object.defineProperty(this, 'type', { value: type });
+            Object.defineProperty(this, 'type', { value: value });
         },
 
         set checkSupport(value) {
